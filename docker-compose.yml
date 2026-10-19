@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      BACKEND_SHARED_KEY: local-development-only-change-me
+    ports:
+      - "8000:8000"
+  frontend:
+    build: ./frontend
+    environment:
+      PORT: 8080
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+      ENTRA_API_SCOPE: ${ENTRA_API_SCOPE:-}
+      APIM_API_BASE_URL: ${APIM_API_BASE_URL:-}
+      APIM_SUBSCRIPTION_KEY: ${APIM_SUBSCRIPTION_KEY:-}
+    ports:
+      - "3000:8080"
+    depends_on:
+      - backend

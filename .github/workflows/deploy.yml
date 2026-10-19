@@ -1,0 +1,67 @@
+name: Build and deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  REGISTRY: ${{ vars.ACR_NAME }}.azurecr.io
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to Azure Container Registry
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - name: Build and push versioned images
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --pull -t "$REGISTRY/node-frontend:$IMAGE_TAG" ./frontend
+          docker build --pull -t "$REGISTRY/python-api:$IMAGE_TAG" ./backend
+          docker push "$REGISTRY/node-frontend:$IMAGE_TAG"
+          docker push "$REGISTRY/python-api:$IMAGE_TAG"
+
+      - name: Update Container App image
+        run: |
+          az containerapp update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$REGISTRY/python-api:${{ github.sha }}"
+
+      - name: Configure App Service and deploy frontend image
+        env:
+          APIM_KEY: ${{ secrets.APIM_SUBSCRIPTION_KEY }}
+        run: |
+          az webapp config appsettings set \
+            --name "${{ vars.APP_SERVICE_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --settings \
+              WEBSITES_PORT=8080 \
+              ENTRA_TENANT_ID="${{ vars.ENTRA_TENANT_ID }}" \
+              ENTRA_CLIENT_ID="${{ vars.ENTRA_CLIENT_ID }}" \
+              ENTRA_API_SCOPE="${{ vars.ENTRA_API_SCOPE }}" \
+              APIM_API_BASE_URL="${{ vars.APIM_API_BASE_URL }}" \
+              APIM_SUBSCRIPTION_KEY="$APIM_KEY"
+          az webapp config set \
+            --name "${{ vars.APP_SERVICE_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --linux-fx-version "DOCKER|$REGISTRY/node-frontend:${{ github.sha }}"
+          az webapp restart --name "${{ vars.APP_SERVICE_NAME }}" --resource-group "$RESOURCE_GROUP"

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "centralindia" },
+    "namePrefix": { "value": "apimdemo-change-me" },
+    "entraTenantId": { "value": "00000000-0000-0000-0000-000000000000" },
+    "entraApiAudience": { "value": "api://00000000-0000-0000-0000-000000000000" },
+    "publisherEmail": { "value": "replace-with-your-email@example.com" },
+    "backendSharedKey": { "value": "REPLACE_WITH_LONG_RANDOM_VALUE" }
+  }
+}
