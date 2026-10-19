@@ -15,6 +15,7 @@ env:
 
 jobs:
   deploy:
+    if: ${{ vars.AZURE_CLIENT_ID != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -45,6 +46,10 @@ jobs:
             --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "$RESOURCE_GROUP" \
             --image "$REGISTRY/python-api:${{ github.sha }}"
+          az containerapp ingress update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --target-port 8000
 
       - name: Configure App Service and deploy frontend image
         env:

@@ -1,6 +1,6 @@
 @description('Azure region for all resources.')
 param location string = resourceGroup().location
-@description('Short globally unique prefix; lowercase letters and digits only.')
+@description('Short globally unique prefix using lowercase letters, digits, and hyphens.')
 @minLength(5)
 @maxLength(18)
 param namePrefix string
@@ -43,7 +43,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [ { server: registry.properties.loginServer, identity: 'system' } ]
-      ingress: { external: true, targetPort: 8000, transport: 'http', allowInsecure: false }
+      ingress: { external: true, targetPort: 80, transport: 'http', allowInsecure: false }
       secrets: [ { name: 'backend-shared-key', value: backendSharedKey } ]
     }
     template: {
@@ -52,12 +52,6 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
         env: [ { name: 'BACKEND_SHARED_KEY', secretRef: 'backend-shared-key' } ]
         resources: { cpu: json('0.5'), memory: '1Gi' }
-        probes: [ {
-          type: 'Readiness'
-          httpGet: { path: '/health', port: 8000, scheme: 'HTTP' }
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        } ]
       } ]
       scale: { minReplicas: 1, maxReplicas: 3 }
     }
@@ -94,7 +88,7 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
       acrUseManagedIdentityCreds: true
       linuxFxVersion: 'DOCKER|nginx:alpine'
       appSettings: [
-        { name: 'WEBSITES_PORT', value: '8080' }
+        { name: 'WEBSITES_PORT', value: '80' }
         { name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE', value: 'false' }
         { name: 'DOCKER_REGISTRY_SERVER_URL', value: 'https://${registry.properties.loginServer}' }
         { name: 'DOCKER_REGISTRY_SERVER_USERNAME', value: '' }

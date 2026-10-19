@@ -49,7 +49,7 @@ flowchart LR
     GH[GitHub Actions<br/>OIDC deployment identity] -->|build & push images| ACR
     GH -->|deploy image versions| FE
     GH -->|deploy image versions| API
-    INFRA[GitHub Actions / Azure CLI<br/>Bicep provisioning] -->|create resources| AZ[Azure resource group]
+    INFRA[Operator / Azure CLI<br/>Bicep provisioning] -->|create resources| AZ[Azure resource group]
     AZ --> FE
     AZ --> GW
     AZ --> API
@@ -98,14 +98,14 @@ The Bicep template creates the Azure runtime resources, but app registrations ar
 1. Create an app registration for the API. Set its Application ID URI (for example `api://<api-client-id>`) and expose a delegated scope named `access_as_user`.
 2. Create a **single-page application** registration for the frontend. Add the App Service URL (for example `https://<app-name>.azurewebsites.net`) as a redirect URI. Do not create a client secret for a SPA.
 3. Add delegated permission to the API's `access_as_user` scope and grant consent as appropriate.
-4. Set the frontend build variables `VITE_ENTRA_TENANT_ID`, `VITE_ENTRA_CLIENT_ID`, `VITE_ENTRA_API_SCOPE`, and `VITE_API_BASE_URL` in GitHub Actions variables (see below).
+4. Set the runtime app settings `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_API_SCOPE`, and `APIM_API_BASE_URL` as GitHub Actions variables (see below). The workflow writes these into App Service settings; the SPA reads them from `/runtime-config.json`.
 5. Set `ENTRA_TENANT_ID` and `ENTRA_API_AUDIENCE` in the Bicep parameter file. Use the exact audience emitted in the API token's `aud` claim (often the API client ID for v2 tokens; configure the template to match your registration).
 
 The app uses the authorization-code flow with PKCE and requests an access token silently after sign-in. The browser token is never sent to the Node server; it is sent directly to APIM over HTTPS.
 
 ## Provision Azure resources
 
-Install Azure CLI with the Container Apps and Bicep support, sign in, and select the target subscription. Names must be globally unique where Azure requires it. Choose a region that supports all selected SKUs. APIM Developer is suitable for learning and integration tests; it is not a production SLA tier and can have material hourly cost.
+Install Azure CLI with the Container Apps and Bicep support, sign in, and select the target subscription. Edit `infra/dev.parameters.json`: set a globally unique lowercase `namePrefix` and your `publisherEmail`. Names must be globally unique where Azure requires it. Choose a region that supports all selected SKUs. APIM Developer is suitable for learning and integration tests; it is not a production SLA tier and can have material hourly cost.
 
 ```bash
 az login
@@ -115,8 +115,8 @@ az deployment group create \
   --resource-group rg-portfolio-api-dev \
   --template-file infra/main.bicep \
   --parameters infra/dev.parameters.json \
-  --parameters entraTenantId=<tenant-guid> entraApiAudience=<api-audience> \
-  --parameters backendSharedKey=<long-random-secret>
+  --parameters entraTenantId='YOUR-TENANT-GUID' entraApiAudience='api://YOUR-API-APP-ID' \
+  --parameters backendSharedKey='REPLACE-WITH-A-LONG-RANDOM-SECRET'
 ```
 
 For PowerShell, replace the backslash line continuations with backticks. Never commit real values into `dev.parameters.json`; it contains placeholders. Use Azure Key Vault or a secure deployment pipeline for secrets. Save the deployment outputs (`registryLoginServer`, `appServiceName`, `containerAppName`, `apimGatewayUrl`) for the GitHub setup. This starter uses a named APIM value for the gateway-to-backend credential. The backend checks the same value from its environment. Rotate it by updating both sides together.
@@ -138,7 +138,7 @@ After provisioning, configure these GitHub **Actions variables**:
 | `APIM_API_BASE_URL` | APIM gateway URL plus API suffix, e.g. `https://<apim>.azure-api.net/demo` |
 | `APIM_SUBSCRIPTION_KEY` (secret) | A disposable, rate-limited APIM subscription key for the browser demo |
 
-Configure the OIDC federated credential to trust `repo:<owner>/<repo>:ref:refs/heads/main` with audience `api://AzureADTokenExchange`. Give that identity `AcrPush` on the registry and enough permission to update the two app resources. The workflow is a template and will fail until those values and the federated credential exist. The initial Bicep provisioning uses public placeholder images so the apps can be created before the first workflow pushes the actual images.
+Configure the OIDC federated credential to trust `repo:<owner>/<repo>:ref:refs/heads/main` with audience `api://AzureADTokenExchange`. Assign `Contributor` on the resource group and `AcrPush` on the registry to that identity. The deployment job stays skipped until `AZURE_CLIENT_ID` is configured; after setup, pushes to `main` build and deploy both images. The initial Bicep provisioning uses public placeholder images so the apps can be created before the first workflow pushes the actual images.
 
 ### APIM subscription key for the browser
 
